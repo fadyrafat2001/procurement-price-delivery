@@ -1,0 +1,160 @@
+# Procurement price and delivery
+
+Status: synthetic source assets only, no executed Power BI report. Prepared with assistant support. Not prior independent work.
+
+## Business question
+Which suppliers combine higher receipt cost with delivery shortfalls?
+
+## Data and model
+48 unique PO lines. Synthetic single receipt per line, no split receipts. Each row is one line, not a supplier summary. Month is the planned receipt month.
+
+## Relationships
+DimSupplier[Supplier], DimMaterial[Material] and DimMonth[Month] each filter matching FactPO columns, active 1:* single direction. Three relationships.
+
+## Import and implementation
+Open the accompanying XLSX in Power BI Desktop using Get data > Excel > Transform Data, or use Queries.pq with the WorkbookPath parameter. Each commented query block is a separate query, not one script to paste wholesale. Load only the named data sheets. Set explicit data types; parse dates with en-US where applicable. Remove auto-created relationships, then create the specified ones. Add DAX measures individually and format ratios as percentages, money as EGP. Hide unused fact columns and use dimension fields for filters.
+
+## Report pages
+Overview: receipt spend, price variance, fill and on-time rate; supplier bar charts with denominator counts. Detail: PO-line table, supplier drill-through, month/material filters. QA: unique keys, received <= ordered, flag consistency; compare SUP-A filter by independently summing its rows.
+
+## Tests
+Expected_Results.json was independently calculated from these inputs in Python. M/DAX have NOT been executed. Match whole-dataset results and relevant filters before calling the report complete. Check each dimension key is unique and non-null; each fact key matches a dimension; required numeric inputs have no nulls or errors. No silent replacement of missing values with zero. Test slicers, clear-all, cross-highlighting, tooltip and drill-through, and confirm totals do not duplicate after relationships. Save PBIX and capture report + Model view; record Desktop version, refresh date and test results.
+
+## Limits
+On-time rate excludes undelivered lines; fill rate includes them with zero received. Delay is nonnegative and averages across delivered lines, including on-time zeros. No claims about purchase savings, supplier fault, service-level contracts, taxes or stock cost. Receipt-price variance is not the consumption-price variance in project 1.
+
+## Sources for implementation
+https://learn.microsoft.com/en-us/power-bi/guidance/star-schema
+https://learn.microsoft.com/en-us/dax/sumx-function-dax
+
+## Field dictionary
+PO_Line is a unique purchase-order line ID. Supplier and Material are fictional category keys. Month is planned receipt period YYYY-MM. Ordered_kg and Received_kg are quantities in kg. Standard_EGP_kg and Actual_EGP_kg are receipt unit prices. Delivered_Flag and OnTime_Flag are binary 0/1. Delay_Days is nonnegative days late, zero for on-time and undelivered lines; use Delivered_Flag to distinguish those cases.
+
+## Independent filtered acceptance tests
+{
+  "checks": "Unique fact keys, unique nonblank dimension keys and all fact-to-dimension matches passed in Python. Native relationships not tested.",
+  "filtered_results": {
+    "SUP-A": {
+      "spend": "283800",
+      "variance": "3800",
+      "delivered": 15,
+      "on_time": 7
+    },
+    "SUP-B": {
+      "spend": "294700",
+      "variance": "6400",
+      "delivered": 14,
+      "on_time": 5
+    },
+    "SUP-C": {
+      "spend": "245300",
+      "variance": "6300",
+      "delivered": 15,
+      "on_time": 6
+    }
+  }
+}
+
+
+PO_Line is a unique purchase-order line ID. Supplier and Material are fictional category keys. Month is planned receipt period YYYY-MM. Ordered_kg and Received_kg are quantities in kg. Standard_EGP_kg and Actual_EGP_kg are receipt unit prices. Delivered_Flag and OnTime_Flag are binary 0/1. Delay_Days is nonnegative days late, zero for on-time and undelivered lines; use Delivered_Flag to distinguish those cases.
+
+
+{
+  "po_lines": 48,
+  "receipt_spend_egp": 823800,
+  "standard_receipt_cost_egp": 807300,
+  "price_variance_egp": 16500,
+  "ordered_kg": 36000,
+  "received_kg": 32000,
+  "delivered_lines": 44,
+  "on_time_lines": 18,
+  "on_time_rate": 0.4090909090909091
+}
+
+{
+  "checks": "Unique fact keys, unique nonblank dimension keys and all fact-to-dimension matches passed in Python. Native relationships not tested.",
+  "filtered_results": {
+    "SUP-A": {
+      "spend": "283800",
+      "variance": "3800",
+      "delivered": 15,
+      "on_time": 7
+    },
+    "SUP-B": {
+      "spend": "294700",
+      "variance": "6400",
+      "delivered": 14,
+      "on_time": 5
+    },
+    "SUP-C": {
+      "spend": "245300",
+      "variance": "6300",
+      "delivered": 15,
+      "on_time": 6
+    }
+  }
+}
+
+EXACT UNEXECUTED M SOURCE
+// UNEXECUTED M SOURCE. Create text parameter WorkbookPath with full local XLSX path.
+// Create this function as fxSheet; invoke it once per data sheet below.
+(sheetName as text) as table =>
+let
+    Source = Excel.Workbook(File.Contents(WorkbookPath), null, true),
+    Data = Source{[Item=sheetName, Kind="Sheet"]}[Data],
+    Headers = Table.PromoteHeaders(Data, [PromoteAllScalars=true])
+in
+    Headers
+
+// Separate query named FactPO:
+let
+    Source = fxSheet("FactPO"),
+    Typed = Table.TransformColumnTypes(Source, {{"PO_Line", type text}, {"Supplier", type text}, {"Material", type text}, {"Month", type text}, {"Ordered_kg", type number}, {"Received_kg", type number}, {"Standard_EGP_kg", type number}, {"Actual_EGP_kg", type number}, {"Delivered_Flag", type number}, {"OnTime_Flag", type number}, {"Delay_Days", type number}}, "en-US")
+in
+    Typed
+
+// Separate query named DimSupplier:
+let
+    Source = fxSheet("DimSupplier"),
+    Typed = Table.TransformColumnTypes(Source, {{"Supplier", type text}}, "en-US")
+in
+    Typed
+
+// Separate query named DimMaterial:
+let
+    Source = fxSheet("DimMaterial"),
+    Typed = Table.TransformColumnTypes(Source, {{"Material", type text}}, "en-US")
+in
+    Typed
+
+// Separate query named DimMonth:
+let
+    Source = fxSheet("DimMonth"),
+    Typed = Table.TransformColumnTypes(Source, {{"Month", type text}}, "en-US")
+in
+    Typed
+
+
+
+EXACT UNEXECUTED DAX SOURCE
+// UNEXECUTED DAX. Create each definition as a separate measure.
+
+Receipt Spend EGP = SUMX(FactPO, FactPO[Received_kg] * FactPO[Actual_EGP_kg])
+
+Standard Receipt Cost EGP = SUMX(FactPO, FactPO[Received_kg] * FactPO[Standard_EGP_kg])
+
+Receipt Price Variance EGP = [Receipt Spend EGP] - [Standard Receipt Cost EGP]
+
+Ordered kg = SUM(FactPO[Ordered_kg])
+
+Received kg = SUM(FactPO[Received_kg])
+
+Fill Rate = DIVIDE([Received kg], [Ordered kg])
+
+Delivered Lines = SUM(FactPO[Delivered_Flag])
+
+On Time Lines = SUM(FactPO[OnTime_Flag])
+
+On Time Rate = DIVIDE([On Time Lines], [Delivered Lines])
+
+Average Delay Days = DIVIDE(SUM(FactPO[Delay_Days]), [Delivered Lines])

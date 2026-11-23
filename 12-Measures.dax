@@ -1,0 +1,21 @@
+// UNEXECUTED DAX. Create each definition as a separate measure.
+
+Receipt Spend EGP = SUMX(FactPO, FactPO[Received_kg] * FactPO[Actual_EGP_kg])
+
+Standard Receipt Cost EGP = SUMX(FactPO, FactPO[Received_kg] * FactPO[Standard_EGP_kg])
+
+Receipt Price Variance EGP = [Receipt Spend EGP] - [Standard Receipt Cost EGP]
+
+Ordered kg = SUM(FactPO[Ordered_kg])
+
+Received kg = SUM(FactPO[Received_kg])
+
+Fill Rate = DIVIDE([Received kg], [Ordered kg])
+
+Delivered Lines = SUM(FactPO[Delivered_Flag])
+
+On Time Lines = SUM(FactPO[OnTime_Flag])
+
+On Time Rate = DIVIDE([On Time Lines], [Delivered Lines])
+
+Average Delay Days = DIVIDE(SUM(FactPO[Delay_Days]), [Delivered Lines])
